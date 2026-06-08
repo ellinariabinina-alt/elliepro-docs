@@ -23,7 +23,8 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 import gspread
-from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
@@ -36,7 +37,9 @@ from telegram.ext import (
 # ============================ НАСТРОЙКИ ============================
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]                       # из переменных Railway
-GOOGLE_CREDENTIALS_JSON = os.environ["GOOGLE_CREDENTIALS_JSON"]  # из переменных Railway
+GOOGLE_CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]         # из переменных Railway
+GOOGLE_CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]  # из переменных Railway
+GOOGLE_REFRESH_TOKEN = os.environ["GOOGLE_REFRESH_TOKEN"]  # из переменных Railway
 
 PARENT_FOLDER_ID = "17dMbmbx6WLgNDRWYQb3L0wFNtdY9-jQG"     # родительская папка на Диске
 SPREADSHEET_ID = "1obb5f5CS1VmDnVaXJzpcEAsjb0uqxOYvQBHg1MOpENM"  # таблица-трекер
@@ -65,8 +68,15 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-_creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
-_creds = Credentials.from_service_account_info(_creds_info, scopes=SCOPES)
+_creds = Credentials(
+    token=None,
+    refresh_token=GOOGLE_REFRESH_TOKEN,
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    token_uri="https://oauth2.googleapis.com/token",
+    scopes=SCOPES,
+)
+_creds.refresh(Request())  # получаем рабочий access token при старте
 _gc = gspread.authorize(_creds)
 _drive = build("drive", "v3", credentials=_creds, cache_discovery=False)
 _sh = _gc.open_by_key(SPREADSHEET_ID)
