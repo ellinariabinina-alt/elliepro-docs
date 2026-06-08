@@ -84,8 +84,13 @@ def _ensure_ws(title, headers):
         ws = _sh.worksheet(title)
     except gspread.WorksheetNotFound:
         ws = _sh.add_worksheet(title=title, rows=2000, cols=len(headers))
-    if not ws.get_all_values():
+    values = ws.get_all_values()
+    if not values:
+        # лист пустой — пишем заголовок
         ws.append_row(headers)
+    elif values[0][:len(headers)] != headers:
+        # заголовка нет (первая строка — данные) — вставляем заголовок сверху
+        ws.insert_row(headers, index=1)
     return ws
 
 
@@ -121,23 +126,26 @@ def _safe_q(text):
 # ---- Сотрудники ----
 
 def find_employee(user_id):
-    for row in EMP_WS.get_all_records():
-        if str(row.get("user_id")) == str(user_id):
-            return row
+    values = EMP_WS.get_all_values()
+    for r in values:
+        if not r or not r[0] or r[0] == EMP_HEADERS[0]:
+            continue  # пустые строки и строка-заголовок
+        if str(r[0]) == str(user_id):
+            return {EMP_HEADERS[j]: (r[j] if j < len(r) else "") for j in range(len(EMP_HEADERS))}
     return None
 
 
 def save_employee(user_id, username, fio, folder_id, folder_name):
-    existing = find_employee(user_id)
-    if existing:
-        # перезапись папки при /repick
-        values = EMP_WS.get_all_values()
-        for i, r in enumerate(values[1:], start=2):
-            if r and str(r[0]) == str(user_id):
-                EMP_WS.update_cell(i, EMP_HEADERS.index("username") + 1, username or "")
-                EMP_WS.update_cell(i, EMP_HEADERS.index("folder_id") + 1, folder_id)
-                EMP_WS.update_cell(i, EMP_HEADERS.index("folder_name") + 1, folder_name)
-                return
+    values = EMP_WS.get_all_values()
+    for i, r in enumerate(values, start=1):
+        if not r or not r[0] or r[0] == EMP_HEADERS[0]:
+            continue
+        if str(r[0]) == str(user_id):
+            # перезапись папки при /repick
+            EMP_WS.update_cell(i, EMP_HEADERS.index("username") + 1, username or "")
+            EMP_WS.update_cell(i, EMP_HEADERS.index("folder_id") + 1, folder_id)
+            EMP_WS.update_cell(i, EMP_HEADERS.index("folder_name") + 1, folder_name)
+            return
     EMP_WS.append_row([
         str(user_id), username or "", fio, folder_id, folder_name, now_utc_iso(),
     ])
@@ -172,9 +180,9 @@ def _pay_rows():
     """Возвращает список (номер_строки, dict) по листу Оплаты."""
     values = PAY_WS.get_all_values()
     out = []
-    for i, r in enumerate(values[1:], start=2):
-        if not r or not r[0]:
-            continue
+    for i, r in enumerate(values, start=1):
+        if not r or not r[0] or r[0] == PAY_HEADERS[0]:
+            continue  # пустые строки и строка-заголовок
         d = {PAY_HEADERS[j]: (r[j] if j < len(r) else "") for j in range(len(PAY_HEADERS))}
         out.append((i, d))
     return out
